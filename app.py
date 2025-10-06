@@ -49,8 +49,6 @@ def solve_sudoku_optimized(board):
 st.set_page_config(page_title="Sudoku Solver", layout="centered")
 st.title("🧩 Sudoku Solver")
 
-st.write("Enter numbers manually, or paste your Sudoku grid from Excel below (0 or blank for empty cells).")
-
 # ---- Session state ----
 if "board" not in st.session_state:
     st.session_state.board = np.zeros((9, 9), dtype=int)
@@ -61,7 +59,7 @@ if "board_parsed" not in st.session_state:
 
 # ---- Paste input area ----
 pasted = st.text_area(
-    "Paste your Sudoku grid (9x9 numbers separated by spaces or tabs):",
+    "Enter numbers manually (0 for empty cells) or paste your Sudoku grid from Excel (9x9):",
     value=st.session_state.pasted,
     height=150
 )
