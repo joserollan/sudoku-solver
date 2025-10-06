@@ -45,19 +45,6 @@ def solve_sudoku_optimized(board):
 
     return backtrack()
 
-def solve_sudoku(board):
-    for i in range(9):
-        for j in range(9):
-            if board[i, j] == 0:
-                for num in range(1, 10):
-                    if is_valid(board, i, j, num):
-                        board[i, j] = num
-                        if solve_sudoku(board):
-                            return True
-                        board[i, j] = 0
-                return False
-    return True
-
 # ---- Streamlit UI ----
 st.set_page_config(page_title="Sudoku Solver", layout="centered")
 st.title("🧩 Sudoku Solver")
