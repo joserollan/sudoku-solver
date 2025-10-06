@@ -59,7 +59,7 @@ if "board_parsed" not in st.session_state:
 
 # ---- Paste input area ----
 pasted = st.text_area(
-    "Enter numbers manually (0 for empty cells) or paste your Sudoku grid from Excel (9x9):",
+    "Enter numbers manually or paste your Sudoku grid from Excel (9x9, with 0s or blanks for empty cells):",
     value=st.session_state.pasted,
     height=150
 )
