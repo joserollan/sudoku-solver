@@ -80,46 +80,6 @@ pasted = st.text_area(
 )
 st.session_state.pasted = pasted
 
-# ---- Parser ----
-def parse_pasted_text(pasted_text):
-    if not pasted_text:
-        return None
-    raw_lines = pasted_text.splitlines()
-    grid = []
-    for r in raw_lines:
-        line = r.rstrip("\r")
-        if "\t" in line:
-            parts = line.split("\t")
-        elif "," in line:
-            parts = line.split(",")
-        else:
-            parts = line.split(" ")
-        row = []
-        for p in parts:
-            p_str = p.strip()
-            if p_str == "":
-                row.append(0)
-            else:
-                m = re.search(r"\d+", p_str)
-                if m:
-                    row.append(int(m.group()))
-                else:
-                    row.append(0)
-        if len(row) < 9:
-            row += [0] * (9 - len(row))
-        else:
-            row = row[:9]
-        grid.append(row)
-    if len(grid) < 9:
-        for _ in range(9 - len(grid)):
-            grid.append([0] * 9)
-    else:
-        grid = grid[:9]
-    arr = np.array(grid, dtype=int)
-    if arr.shape == (9, 9):
-        return arr
-    return None
-
 #---- Improved Parser ----
 def parse_sudoku_text(pasted_text):
     """
