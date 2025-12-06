@@ -3,8 +3,13 @@ import numpy as np
 import re
 import random
 
-# ---- Sudoku Solver ----
+
+# ============================================================================
+# CORE SUDOKU FUNCTIONS
+# ============================================================================
+
 def is_valid(board, row, col, num):
+    """Check if placing num at board[row][col] is valid"""
     if num in board[row]:
         return False
     if num in board[:, col]:
@@ -14,23 +19,23 @@ def is_valid(board, row, col, num):
         return False
     return True
 
+
 def solve_sudoku_optimized(board):
-    # Precompute empty cells
+    """Solve sudoku using backtracking with optimized candidate selection"""
     empty_cells = [(i, j) for i in range(9) for j in range(9) if board[i, j] == 0]
 
     def candidates(row, col):
         nums = set(range(1, 10))
-        nums -= set(board[row, :])       # remove row numbers
-        nums -= set(board[:, col])       # remove column numbers
+        nums -= set(board[row, :])
+        nums -= set(board[:, col])
         start_row, start_col = 3*(row//3), 3*(col//3)
-        nums -= set(board[start_row:start_row+3, start_col:start_col+3].flatten())  # remove block numbers
+        nums -= set(board[start_row:start_row+3, start_col:start_col+3].flatten())
         return list(nums)
 
     def backtrack():
         if not empty_cells:
             return True
 
-        # Choose the empty cell with the fewest candidates
         empty_cells.sort(key=lambda pos: len(candidates(*pos)))
         row, col = empty_cells.pop(0)
 
@@ -40,34 +45,16 @@ def solve_sudoku_optimized(board):
                 return True
             board[row, col] = 0
 
-        # Backtrack failed, put cell back
         empty_cells.insert(0, (row, col))
         return False
 
     return backtrack()
 
-# ---- Sudoku Generator ----
-def generate_complete_sudoku():
-    """Generate a complete valid sudoku board"""
-    board = np.zeros((9, 9), dtype=int)
-
-    # Fill diagonal 3x3 boxes first (they don't affect each other)
-    for box in range(3):
-        nums = list(range(1, 10))
-        random.shuffle(nums)
-        for i in range(3):
-            for j in range(3):
-                board[box*3 + i][box*3 + j] = nums[i*3 + j]
-
-    # Solve the rest
-    solve_sudoku_optimized(board)
-    return board
 
 def count_solutions(board, limit=2):
     """Count solutions up to limit (for checking uniqueness)"""
     board_copy = board.copy()
     empty_cells = [(i, j) for i in range(9) for j in range(9) if board_copy[i, j] == 0]
-
     solutions = [0]
 
     def candidates(row, col):
@@ -95,21 +82,43 @@ def count_solutions(board, limit=2):
     backtrack(0)
     return solutions[0]
 
+
+def generate_complete_sudoku():
+    """Generate a complete valid sudoku board"""
+    board = np.zeros((9, 9), dtype=int)
+
+    # Fill diagonal 3x3 boxes first (they don't affect each other)
+    for box in range(3):
+        nums = list(range(1, 10))
+        random.shuffle(nums)
+        for i in range(3):
+            for j in range(3):
+                board[box*3 + i][box*3 + j] = nums[i*3 + j]
+
+    # Solve the rest
+    solve_sudoku_optimized(board)
+    return board
+
+
 def generate_sudoku_puzzle(difficulty='medium'):
     """Generate a sudoku puzzle with a unique solution
-    difficulty: 'easy' (40-45 clues), 'medium' (30-35 clues), 'hard' (25-30 clues)
+
+    Args:
+        difficulty: 'easy' (40-45 clues), 'medium' (30-35 clues), 'hard' (25-30 clues)
+
+    Returns:
+        9x9 numpy array with the puzzle
     """
-    # Generate complete board
     board = generate_complete_sudoku()
     puzzle = board.copy()
 
     # Determine number of cells to remove based on difficulty
     if difficulty == 'easy':
-        cells_to_remove = random.randint(36, 41)  # 40-45 clues remaining
+        cells_to_remove = random.randint(36, 41)
     elif difficulty == 'medium':
-        cells_to_remove = random.randint(46, 51)  # 30-35 clues remaining
+        cells_to_remove = random.randint(46, 51)
     else:  # hard
-        cells_to_remove = random.randint(51, 56)  # 25-30 clues remaining
+        cells_to_remove = random.randint(51, 56)
 
     # Get all cell positions and shuffle
     cells = [(i, j) for i in range(9) for j in range(9)]
@@ -120,7 +129,6 @@ def generate_sudoku_puzzle(difficulty='medium'):
         if removed >= cells_to_remove:
             break
 
-        # Try removing this cell
         backup = puzzle[row, col]
         puzzle[row, col] = 0
 
@@ -128,41 +136,21 @@ def generate_sudoku_puzzle(difficulty='medium'):
         if count_solutions(puzzle, limit=2) == 1:
             removed += 1
         else:
-            # Restore the cell if it creates multiple solutions
             puzzle[row, col] = backup
 
     return puzzle
 
-# ---- Streamlit UI ----
-st.set_page_config(page_title="Sudoku Solver", layout="wide")
-st.title("🧩 Sudoku Solver & Generator")
 
-# ---- Session state ----
-if "board" not in st.session_state:
-    st.session_state.board = np.zeros((9, 9), dtype=int)
-if "pasted" not in st.session_state:
-    st.session_state.pasted = ""
-if "board_parsed" not in st.session_state:
-    st.session_state.board_parsed = False
-
-# ---- Paste input area ----
-with st.expander("📋 Import Sudoku (Optional)", expanded=False):
-    pasted = st.text_area(
-        "Paste your Sudoku grid from Excel (9x9, with 0s or blanks for empty cells):",
-        value=st.session_state.pasted,
-        height=120,
-        placeholder="Paste grid here or use the generator below..."
-    )
-    st.session_state.pasted = pasted
-
-#---- Improved Parser ----
 def parse_sudoku_text(pasted_text):
-    """
-    Robust parser for all Sudoku paste formats:
+    """Parse sudoku text from various formats
+
+    Supports:
     - Tabs or spaces (Excel-style), preserves empty cells
     - Compact 9-digit rows (0 = empty)
     - Sparse grids with multiple empty columns
-    Returns a 9x9 numpy array
+
+    Returns:
+        9x9 numpy array
     """
     if not pasted_text:
         return None
@@ -172,7 +160,7 @@ def parse_sudoku_text(pasted_text):
 
     for r in lines:
         if not r.strip():
-            continue  # skip empty lines
+            continue
 
         r = r.rstrip("\r\n")
 
@@ -184,7 +172,6 @@ def parse_sudoku_text(pasted_text):
             parts = r.split("\t")
             row = []
             for part in parts:
-                # Split remaining spaces inside part
                 subparts = re.split(r" ", part)
                 for sp in subparts:
                     sp = sp.strip()
@@ -209,7 +196,34 @@ def parse_sudoku_text(pasted_text):
 
     return np.array(grid, dtype=int)
 
-# ---- Load pasted board only once ----
+
+# ============================================================================
+# STREAMLIT UI
+# ============================================================================
+
+# Page configuration
+st.set_page_config(page_title="Sudoku Solver", layout="wide")
+
+# Custom CSS to reduce top padding
+st.markdown("""
+    <style>
+        .block-container {
+            padding-top: 2rem;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🧩 Sudoku Solver & Generator")
+
+# Session state initialization
+if "board" not in st.session_state:
+    st.session_state.board = np.zeros((9, 9), dtype=int)
+if "pasted" not in st.session_state:
+    st.session_state.pasted = ""
+if "board_parsed" not in st.session_state:
+    st.session_state.board_parsed = False
+
+# Load pasted board
 if st.session_state.pasted.strip() != "" and not st.session_state.board_parsed:
     parsed_board = parse_sudoku_text(st.session_state.pasted)
     if parsed_board is not None:
@@ -218,62 +232,82 @@ if st.session_state.pasted.strip() != "" and not st.session_state.board_parsed:
 
 board = st.session_state.board
 
-st.markdown("---")
+# ============================================================================
+# TOP SECTION: Generate or Import
+# ============================================================================
 
-# ---- Main Layout: Controls on left, Grid on right ----
-left_col, right_col = st.columns([1, 1.5])
+top_left, spacer, top_right = st.columns([1, 0.1, 1])
 
-with left_col:
+with top_left:
     st.markdown("### 🎲 Generate Puzzle")
 
     difficulty = st.radio(
-        "Difficulty Level:",
+        "Select difficulty:",
         options=["Easy", "Medium", "Hard"],
+        horizontal=True,
         index=1,
         help="Easy: 40-45 clues | Medium: 30-35 clues | Hard: 25-30 clues"
     )
 
-    if st.button("🎲 Generate New Puzzle", use_container_width=True):
+    if st.button("Generate", use_container_width=True):
         with st.spinner(f"Generating {difficulty} puzzle..."):
             new_puzzle = generate_sudoku_puzzle(difficulty=difficulty.lower())
             st.session_state.board = new_puzzle
             st.session_state.pasted = ""
             st.session_state.board_parsed = False
-            st.success(f"✅ {difficulty} puzzle generated!")
             st.rerun()
 
-    st.markdown("---")
+with spacer:
+    st.markdown("<div style='text-align: center; padding-top: 80px; font-size: 18px; font-weight: bold;'>OR</div>", unsafe_allow_html=True)
+
+with top_right:
+    st.markdown("### 📋 Import Puzzle")
+
+    pasted = st.text_area(
+        "Paste your Sudoku grid (9x9, with 0s or blanks for empty cells):",
+        value=st.session_state.pasted,
+        height=125,
+        placeholder="Paste grid here..."
+    )
+    st.session_state.pasted = pasted
+
+st.markdown("---")
+
+# ============================================================================
+# BOTTOM SECTION: Grid, Info, and Actions
+# ============================================================================
+
+left_col, center_col, right_col = st.columns([0.7, 1.6, 0.7])
+
+# Left column: Actions
+with left_col:
     st.markdown("### 🔧 Actions")
 
-    if st.button("🧮 Solve Puzzle", use_container_width=True, type="primary"):
+    is_board_empty = np.count_nonzero(board) == 0
+
+    if st.button("🧮 Solve", use_container_width=True, type="primary", disabled=is_board_empty):
         board_copy = st.session_state.board.copy()
         if solve_sudoku_optimized(board_copy):
             st.session_state.board = board_copy
-            st.success("✅ Puzzle solved!")
+            st.success("✅ Solved!")
             st.rerun()
         else:
-            st.error("❌ No valid solution found.")
+            st.error("❌ No solution.")
 
-    if st.button("🧹 Clear Grid", use_container_width=True):
+    if st.button("🧹 Clear", use_container_width=True):
         st.session_state.board = np.zeros((9, 9), dtype=int)
         st.session_state.pasted = ""
         st.session_state.board_parsed = False
-        st.success("Grid cleared!")
         st.rerun()
 
-    st.markdown("---")
-    st.markdown("### 📈 Info")
-    filled_cells = np.count_nonzero(board)
-    empty_cells = 81 - filled_cells
-    st.metric("Filled Cells", f"{filled_cells}/81")
-    st.metric("Empty Cells", empty_cells)
+# Center column: Grid
+with center_col:
+    st.markdown("<h3 style='text-align: center;'>📊 Current Puzzle</h3>", unsafe_allow_html=True)
 
-with right_col:
-    st.markdown("### 📊 Current Puzzle")
-    # Display HTML grid
-    grid_html = "<table style='border-collapse: collapse; margin:20px auto;'>"
+    # Build HTML grid
+    grid_html = "<table style='border-collapse: collapse; margin:10px auto; table-layout: fixed;'>"
     for i in range(9):
-        grid_html += "<tr>"
+        grid_html += "<tr style='height:40px;'>"
         for j in range(9):
             val = int(board[i, j]) if board[i, j] != 0 else ""
             border_style = "1px solid #999;"
@@ -285,7 +319,19 @@ with right_col:
                 border_style += "border-right: 3px solid black;"
             if i == 8:
                 border_style += "border-bottom: 3px solid black;"
-            grid_html += f"<td style='width:40px; height:40px; text-align:center; border:{border_style}; font-size:20px; font-weight:bold;'>{val}</td>"
+            grid_html += f"<td style='width:40px; height:40px; min-height:40px; max-height:40px; text-align:center; vertical-align:middle; border:{border_style}; font-size:20px; font-weight:bold; padding:0;'>{val}</td>"
         grid_html += "</tr>"
     grid_html += "</table>"
     st.markdown(grid_html, unsafe_allow_html=True)
+
+# Right column: Info
+with right_col:
+    st.markdown("### 📈 Info")
+
+    filled_cells = np.count_nonzero(board)
+    empty_cells = 81 - filled_cells
+    progress = (filled_cells / 81) * 100
+
+    st.metric("Filled", f"{filled_cells}/81")
+    st.metric("Empty", empty_cells)
+    st.metric("Progress", f"{progress:.0f}%")
