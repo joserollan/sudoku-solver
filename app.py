@@ -134,8 +134,8 @@ def generate_sudoku_puzzle(difficulty='medium'):
     return puzzle
 
 # ---- Streamlit UI ----
-st.set_page_config(page_title="Sudoku Solver", layout="centered")
-st.title("🧩 Sudoku Solver")
+st.set_page_config(page_title="Sudoku Solver", layout="wide")
+st.title("🧩 Sudoku Solver & Generator")
 
 # ---- Session state ----
 if "board" not in st.session_state:
@@ -146,12 +146,14 @@ if "board_parsed" not in st.session_state:
     st.session_state.board_parsed = False
 
 # ---- Paste input area ----
-pasted = st.text_area(
-    "Enter numbers manually or paste your Sudoku grid from Excel (9x9, with 0s or blanks for empty cells):",
-    value=st.session_state.pasted,
-    height=150
-)
-st.session_state.pasted = pasted
+with st.expander("📋 Import Sudoku (Optional)", expanded=False):
+    pasted = st.text_area(
+        "Paste your Sudoku grid from Excel (9x9, with 0s or blanks for empty cells):",
+        value=st.session_state.pasted,
+        height=120,
+        placeholder="Paste grid here or use the generator below..."
+    )
+    st.session_state.pasted = pasted
 
 #---- Improved Parser ----
 def parse_sudoku_text(pasted_text):
@@ -216,63 +218,74 @@ if st.session_state.pasted.strip() != "" and not st.session_state.board_parsed:
 
 board = st.session_state.board
 
-# ---- Display HTML grid ----
-st.markdown("### Sudoku Grid")
-grid_html = "<table style='border-collapse: collapse; margin:auto;'>"
-for i in range(9):
-    grid_html += "<tr>"
-    for j in range(9):
-        val = int(board[i, j]) if board[i, j] != 0 else ""
-        border_style = "1px solid #999;"
-        if j % 3 == 0:
-            border_style += "border-left: 3px solid black;"
-        if i % 3 == 0:
-            border_style += "border-top: 3px solid black;"
-        if j == 8:
-            border_style += "border-right: 3px solid black;"
-        if i == 8:
-            border_style += "border-bottom: 3px solid black;"
-        grid_html += f"<td style='width:30px; height:30px; text-align:center; border:{border_style}; font-size:18px;'>{val}</td>"
-    grid_html += "</tr>"
-grid_html += "</table>"
-st.markdown(grid_html, unsafe_allow_html=True)
+st.markdown("---")
 
-# ---- Buttons ----
-col1, col2, col3 = st.columns(3)
+# ---- Main Layout: Controls on left, Grid on right ----
+left_col, right_col = st.columns([1, 1.5])
 
-with col1:
-    if st.button("🧮 Solve Sudoku"):
+with left_col:
+    st.markdown("### 🎲 Generate Puzzle")
+
+    difficulty = st.radio(
+        "Difficulty Level:",
+        options=["Easy", "Medium", "Hard"],
+        index=1,
+        help="Easy: 40-45 clues | Medium: 30-35 clues | Hard: 25-30 clues"
+    )
+
+    if st.button("🎲 Generate New Puzzle", use_container_width=True):
+        with st.spinner(f"Generating {difficulty} puzzle..."):
+            new_puzzle = generate_sudoku_puzzle(difficulty=difficulty.lower())
+            st.session_state.board = new_puzzle
+            st.session_state.pasted = ""
+            st.session_state.board_parsed = False
+            st.success(f"✅ {difficulty} puzzle generated!")
+            st.rerun()
+
+    st.markdown("---")
+    st.markdown("### 🔧 Actions")
+
+    if st.button("🧮 Solve Puzzle", use_container_width=True, type="primary"):
         board_copy = st.session_state.board.copy()
         if solve_sudoku_optimized(board_copy):
             st.session_state.board = board_copy
-            st.success("✅ Sudoku solved!")
+            st.success("✅ Puzzle solved!")
             st.rerun()
         else:
             st.error("❌ No valid solution found.")
 
-with col2:
-    if st.button("🧹 Clear Grid"):
+    if st.button("🧹 Clear Grid", use_container_width=True):
         st.session_state.board = np.zeros((9, 9), dtype=int)
         st.session_state.pasted = ""
         st.session_state.board_parsed = False
+        st.success("Grid cleared!")
         st.rerun()
 
-# ---- Generator Section ----
-st.markdown("---")
-st.markdown("### 🎲 Generate New Puzzle")
+    st.markdown("---")
+    st.markdown("### 📈 Info")
+    filled_cells = np.count_nonzero(board)
+    empty_cells = 81 - filled_cells
+    st.metric("Filled Cells", f"{filled_cells}/81")
+    st.metric("Empty Cells", empty_cells)
 
-difficulty = st.radio(
-    "Select difficulty:",
-    options=["easy", "medium", "hard"],
-    horizontal=True,
-    index=1
-)
-
-if st.button("🎲 Generate Puzzle"):
-    with st.spinner(f"Generating {difficulty} puzzle..."):
-        new_puzzle = generate_sudoku_puzzle(difficulty=difficulty)
-        st.session_state.board = new_puzzle
-        st.session_state.pasted = ""
-        st.session_state.board_parsed = False
-        st.success(f"✅ New {difficulty} puzzle generated!")
-        st.rerun()
+with right_col:
+    st.markdown("### 📊 Current Puzzle")
+    # Display HTML grid
+    grid_html = "<table style='border-collapse: collapse; margin:20px auto;'>"
+    for i in range(9):
+        grid_html += "<tr>"
+        for j in range(9):
+            val = int(board[i, j]) if board[i, j] != 0 else ""
+            border_style = "1px solid #999;"
+            if j % 3 == 0:
+                border_style += "border-left: 3px solid black;"
+            if i % 3 == 0:
+                border_style += "border-top: 3px solid black;"
+            if j == 8:
+                border_style += "border-right: 3px solid black;"
+            if i == 8:
+                border_style += "border-bottom: 3px solid black;"
+            grid_html += f"<td style='width:40px; height:40px; text-align:center; border:{border_style}; font-size:20px; font-weight:bold;'>{val}</td>"
+        grid_html += "</tr>"
+    grid_html += "</table>"
+    st.markdown(grid_html, unsafe_allow_html=True)
