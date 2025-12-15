@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin: 10px auto;
+            table-layout: fixed;
+        }
+
+        td {
+            width: 40px;
+            height: 40px;
+            text-align: center;
+            vertical-align: middle;
+            border: 1px solid #999;
+            padding: 0;
+        }
+
+        /* 3x3 box borders - thick borders every 3 cells */
+        td:nth-child(3n+1) { border-left: 3px solid black; }
+        td:nth-child(9) { border-right: 3px solid black; }
+        tr:nth-child(3n+1) td { border-top: 3px solid black; }
+        tr:nth-child(9) td { border-bottom: 3px solid black; }
+
+        /* Input styling to blend seamlessly with table */
+        input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        /* Remove number input spinners */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* Focus state - subtle blue background */
+        input:focus {
+            background: #e3f2fd;
+        }
+
+        /* Initial clues styling - darker and read-only */
+        input.clue {
+            color: #000;
+            font-weight: 900;
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        /* User entries - blue color */
+        input.user-entry {
+            color: #1976d2;
+        }
+
+        /* Invalid entries - red color */
+        input.invalid {
+            color: #d32f2f;
+            background: #ffebee;
+        }
+
+        /* Disabled state when no puzzle loaded */
+        input:disabled {
+            background: #fafafa;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <table id="sudoku-grid"></table>
+
+    <script>
+        // Get board data from Python (injected via template replacement)
+        const initialBoard = {{BOARD_DATA}};
+        const initialClues = {{CLUES_DATA}};
+        const isEmpty = {{IS_EMPTY}};
+
+        // Build the grid dynamically
+        function buildGrid() {
+            const table = document.getElementById('sudoku-grid');
+            table.innerHTML = '';
+
+            for (let i = 0; i < 9; i++) {
+                const tr = document.createElement('tr');
+                tr.style.height = '40px';
+
+                for (let j = 0; j < 9; j++) {
+                    const td = document.createElement('td');
+                    const input = document.createElement('input');
+
+                    input.type = 'text';
+                    input.maxLength = 1;
+                    input.value = initialBoard[i][j] === 0 ? '' : initialBoard[i][j];
+                    input.dataset.row = i;
+                    input.dataset.col = j;
+
+                    // Check if this is an initial clue or if board is empty
+                    const isClue = initialClues[i][j];
+
+                    if (isEmpty) {
+                        // Disable all inputs when no puzzle loaded
+                        input.disabled = true;
+                    } else if (isClue) {
+                        // Make initial clues read-only
+                        input.readOnly = true;
+                        input.classList.add('clue');
+                    } else {
+                        // User-editable cells
+                        input.classList.add('user-entry');
+                    }
+
+                    // Input validation and event handling (only for editable cells)
+                    if (!isEmpty && !isClue) {
+                        input.addEventListener('input', handleInput);
+                        input.addEventListener('keydown', handleKeyDown);
+                    }
+
+                    td.appendChild(input);
+                    tr.appendChild(td);
+                }
+
+                table.appendChild(tr);
+            }
+        }
+
+        function handleInput(e) {
+            const value = e.target.value;
+
+            // Only allow digits 1-9 or empty
+            if (value !== '' && (!/^[1-9]$/.test(value))) {
+                e.target.value = '';
+                return;
+            }
+
+            // Validate all cells and mark invalid ones
+            validateAllCells();
+
+            // Send updated board to Streamlit
+            sendBoardToStreamlit();
+        }
+
+        function handleKeyDown(e) {
+            const row = parseInt(e.target.dataset.row);
+            const col = parseInt(e.target.dataset.col);
+
+            // Arrow key navigation
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+                navigateGrid(row, col, e.key);
+            }
+
+            // Delete/Backspace clears cell
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.target.value = '';
+                validateAllCells();
+                sendBoardToStreamlit();
+            }
+        }
+
+        function navigateGrid(row, col, direction) {
+            let newRow = row, newCol = col;
+
+            switch(direction) {
+                case 'ArrowUp': newRow = Math.max(0, row - 1); break;
+                case 'ArrowDown': newRow = Math.min(8, row + 1); break;
+                case 'ArrowLeft': newCol = Math.max(0, col - 1); break;
+                case 'ArrowRight': newCol = Math.min(8, col + 1); break;
+            }
+
+            const inputs = document.querySelectorAll('input');
+            const targetInput = Array.from(inputs).find(
+                inp => inp.dataset.row == newRow && inp.dataset.col == newCol
+            );
+            if (targetInput) {
+                targetInput.focus();
+                targetInput.select();
+            }
+        }
+
+        function validateAllCells() {
+            const inputs = document.querySelectorAll('input:not(.clue):not(:disabled)');
+
+            inputs.forEach(input => {
+                const row = parseInt(input.dataset.row);
+                const col = parseInt(input.dataset.col);
+                const value = input.value;
+
+                // Remove invalid class first
+                input.classList.remove('invalid');
+
+                // Skip empty cells
+                if (value === '') return;
+
+                const num = parseInt(value);
+
+                // Check for conflicts in row
+                const rowInputs = document.querySelectorAll(`input[data-row="${row}"]`);
+                let rowConflict = false;
+                rowInputs.forEach(inp => {
+                    if (inp !== input && inp.value === value) {
+                        rowConflict = true;
+                    }
+                });
+
+                // Check for conflicts in column
+                const colInputs = document.querySelectorAll(`input[data-col="${col}"]`);
+                let colConflict = false;
+                colInputs.forEach(inp => {
+                    if (inp !== input && inp.value === value) {
+                        colConflict = true;
+                    }
+                });
+
+                // Check for conflicts in 3x3 box
+                const boxRow = Math.floor(row / 3);
+                const boxCol = Math.floor(col / 3);
+                let boxConflict = false;
+
+                for (let i = boxRow * 3; i < boxRow * 3 + 3; i++) {
+                    for (let j = boxCol * 3; j < boxCol * 3 + 3; j++) {
+                        const boxInput = document.querySelector(`input[data-row="${i}"][data-col="${j}"]`);
+                        if (boxInput && boxInput !== input && boxInput.value === value) {
+                            boxConflict = true;
+                        }
+                    }
+                }
+
+                // Mark as invalid if any conflict found
+                if (rowConflict || colConflict || boxConflict) {
+                    input.classList.add('invalid');
+                }
+            });
+        }
+
+        function sendBoardToStreamlit() {
+            // Note: st.components.v1.html() doesn't support real-time bidirectional updates
+            // The board state only updates when actions like Solve are clicked
+        }
+
+        // Initialize grid on load
+        buildGrid();
+        validateAllCells();
+    </script>
+</body>
+</html>

@@ -201,6 +201,63 @@ def parse_sudoku_text(pasted_text):
 # STREAMLIT UI
 # ============================================================================
 
+def is_board_solved(board):
+    """Check if the board is completely filled and valid"""
+    # Check if board is full
+    if np.count_nonzero(board) != 81:
+        return False
+
+    # Check all rows, columns, and boxes for validity
+    for i in range(9):
+        # Check row
+        if len(set(board[i, :])) != 9 or 0 in board[i, :]:
+            return False
+        # Check column
+        if len(set(board[:, i])) != 9 or 0 in board[:, i]:
+            return False
+
+    # Check all 3x3 boxes
+    for box_row in range(3):
+        for box_col in range(3):
+            box = board[box_row*3:(box_row+1)*3, box_col*3:(box_col+1)*3].flatten()
+            if len(set(box)) != 9 or 0 in box:
+                return False
+
+    return True
+
+
+def render_editable_grid(board, initial_clues, is_empty=False):
+    """Render an editable Sudoku grid using HTML/JavaScript component
+
+    Args:
+        board: 9x9 NumPy array with the current board state
+        initial_clues: 9x9 NumPy boolean array marking which cells are initial clues
+        is_empty: If True, disable all editing (no puzzle loaded)
+
+    Returns:
+        Updated board as nested list (or None on first render)
+    """
+    # Read HTML template from file
+    import os
+    template_path = os.path.join(os.path.dirname(__file__), 'sudoku_grid.html')
+    with open(template_path, 'r', encoding='utf-8') as f:
+        html_template = f.read()
+
+    # Convert data to JavaScript format
+    board_json = str(board.tolist())
+    clues_json = str(initial_clues.tolist()).replace('True', 'true').replace('False', 'false')
+    is_empty_js = 'true' if is_empty else 'false'
+
+    # Inject data into template
+    html_content = html_template.replace('{{BOARD_DATA}}', board_json)
+    html_content = html_content.replace('{{CLUES_DATA}}', clues_json)
+    html_content = html_content.replace('{{IS_EMPTY}}', is_empty_js)
+
+    # Render component
+    result = st.components.v1.html(html_content, height=420, scrolling=False)
+    return result
+
+
 # Page configuration
 st.set_page_config(page_title="Sudoku Solver", layout="wide")
 
@@ -222,12 +279,15 @@ if "pasted" not in st.session_state:
     st.session_state.pasted = ""
 if "board_parsed" not in st.session_state:
     st.session_state.board_parsed = False
+if "initial_clues" not in st.session_state:
+    st.session_state.initial_clues = np.zeros((9, 9), dtype=bool)
 
 # Load pasted board
 if st.session_state.pasted.strip() != "" and not st.session_state.board_parsed:
     parsed_board = parse_sudoku_text(st.session_state.pasted)
     if parsed_board is not None:
         st.session_state.board = parsed_board
+        st.session_state.initial_clues = (parsed_board != 0)
         st.session_state.board_parsed = True
 
 board = st.session_state.board
@@ -253,6 +313,7 @@ with top_left:
         with st.spinner(f"Generating {difficulty} puzzle..."):
             new_puzzle = generate_sudoku_puzzle(difficulty=difficulty.lower())
             st.session_state.board = new_puzzle
+            st.session_state.initial_clues = (new_puzzle != 0)
             st.session_state.pasted = ""
             st.session_state.board_parsed = False
             st.rerun()
@@ -284,8 +345,9 @@ with left_col:
     st.markdown("### 🔧 Actions")
 
     is_board_empty = np.count_nonzero(board) == 0
+    is_solved = is_board_solved(board)
 
-    if st.button("🧮 Solve", use_container_width=True, type="primary", disabled=is_board_empty):
+    if st.button("🧮 Solve", use_container_width=True, type="primary", disabled=(is_board_empty or is_solved)):
         board_copy = st.session_state.board.copy()
         if solve_sudoku_optimized(board_copy):
             st.session_state.board = board_copy
@@ -296,33 +358,29 @@ with left_col:
 
     if st.button("🧹 Clear", use_container_width=True):
         st.session_state.board = np.zeros((9, 9), dtype=int)
+        st.session_state.initial_clues = np.zeros((9, 9), dtype=bool)
         st.session_state.pasted = ""
         st.session_state.board_parsed = False
         st.rerun()
+
+    # Show "Solved!" message when puzzle is complete and valid
+    if is_solved:
+        st.markdown("<p style='color: #2e7d32; font-weight: bold; font-size: 18px; text-align: center; margin-top: 20px;'>✅ Solved!</p>", unsafe_allow_html=True)
 
 # Center column: Grid
 with center_col:
     st.markdown("<h3 style='text-align: center;'>📊 Current Puzzle</h3>", unsafe_allow_html=True)
 
-    # Build HTML grid
-    grid_html = "<table style='border-collapse: collapse; margin:10px auto; table-layout: fixed;'>"
-    for i in range(9):
-        grid_html += "<tr style='height:40px;'>"
-        for j in range(9):
-            val = int(board[i, j]) if board[i, j] != 0 else ""
-            border_style = "1px solid #999;"
-            if j % 3 == 0:
-                border_style += "border-left: 3px solid black;"
-            if i % 3 == 0:
-                border_style += "border-top: 3px solid black;"
-            if j == 8:
-                border_style += "border-right: 3px solid black;"
-            if i == 8:
-                border_style += "border-bottom: 3px solid black;"
-            grid_html += f"<td style='width:40px; height:40px; min-height:40px; max-height:40px; text-align:center; vertical-align:middle; border:{border_style}; font-size:20px; font-weight:bold; padding:0;'>{val}</td>"
-        grid_html += "</tr>"
-    grid_html += "</table>"
-    st.markdown(grid_html, unsafe_allow_html=True)
+    # Render editable grid component
+    is_board_empty = np.count_nonzero(st.session_state.board) == 0
+    updated_board = render_editable_grid(
+        st.session_state.board,
+        st.session_state.initial_clues,
+        is_empty=is_board_empty
+    )
+
+    # Note: st.components.v1.html() does not support real-time bidirectional updates
+    # The grid is display-only between button clicks
 
 # Right column: Info
 with right_col:
