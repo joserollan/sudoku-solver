@@ -270,7 +270,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🧩 Sudoku Solver & Generator")
+st.title("🧩 Sudoku Solver & Generator - Autodeployment!")
 
 # Session state initialization
 if "board" not in st.session_state:
