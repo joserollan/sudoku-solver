@@ -299,6 +299,20 @@ board = st.session_state.board
 top_left, spacer, top_right = st.columns([1, 0.1, 1])
 
 with top_left:
+    st.markdown("### 📋 Import Puzzle")
+
+    pasted = st.text_area(
+        "Paste your Sudoku grid (9x9, with 0s or blanks for empty cells):",
+        value=st.session_state.pasted,
+        height=125,
+        placeholder="Paste grid here..."
+    )
+    st.session_state.pasted = pasted
+
+with spacer:
+    st.markdown("<div style='text-align: center; padding-top: 80px; font-size: 18px; font-weight: bold;'>OR</div>", unsafe_allow_html=True)
+
+with top_right:
     st.markdown("### 🎲 Generate Puzzle")
 
     difficulty = st.radio(
@@ -317,20 +331,6 @@ with top_left:
             st.session_state.pasted = ""
             st.session_state.board_parsed = False
             st.rerun()
-
-with spacer:
-    st.markdown("<div style='text-align: center; padding-top: 80px; font-size: 18px; font-weight: bold;'>OR</div>", unsafe_allow_html=True)
-
-with top_right:
-    st.markdown("### 📋 Import Puzzle")
-
-    pasted = st.text_area(
-        "Paste your Sudoku grid (9x9, with 0s or blanks for empty cells):",
-        value=st.session_state.pasted,
-        height=125,
-        placeholder="Paste grid here..."
-    )
-    st.session_state.pasted = pasted
 
 st.markdown("---")
 
