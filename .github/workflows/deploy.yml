@@ -1,0 +1,20 @@
+name: Deploy to Oracle VM
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: 161.153.202.119
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/sudoku-solver
+            git pull origin main
+            sudo systemctl restart sudoku
