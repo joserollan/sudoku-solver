@@ -338,7 +338,7 @@ st.markdown("---")
 # BOTTOM SECTION: Grid, Info, and Actions
 # ============================================================================
 
-left_col, center_col, right_col = st.columns([0.7, 1.6, 0.7])
+left_col, center_col = st.columns([0.7, 2.3])
 
 # Left column: Actions
 with left_col:
@@ -379,17 +379,4 @@ with center_col:
         is_empty=is_board_empty
     )
 
-    # Note: st.components.v1.html() does not support real-time bidirectional updates
-    # The grid is display-only between button clicks
-
-# Right column: Info
-with right_col:
-    st.markdown("### 📈 Info")
-
-    filled_cells = np.count_nonzero(board)
-    empty_cells = 81 - filled_cells
-    progress = (filled_cells / 81) * 100
-
-    st.metric("Filled", f"{filled_cells}/81")
-    st.metric("Empty", empty_cells)
-    st.metric("Progress", f"{progress:.0f}%")
+    # Info panel is now rendered inside the HTML component for real-time updates

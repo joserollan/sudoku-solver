@@ -10,7 +10,7 @@
 
         table {
             border-collapse: collapse;
-            margin: 10px auto;
+            margin: 10px 0;
             table-layout: fixed;
         }
 
@@ -83,10 +83,59 @@
             background: #fafafa;
             cursor: not-allowed;
         }
+
+        /* Grid + Info layout */
+        #grid-container {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 24px;
+        }
+
+        #info-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding-top: 10px;
+        }
+
+        .metric {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            font-weight: 400;
+            color: rgba(49, 51, 63, 0.6);
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: rgb(49, 51, 63);
+        }
     </style>
 </head>
 <body>
-    <table id="sudoku-grid"></table>
+    <div id="grid-container">
+        <table id="sudoku-grid"></table>
+        <div id="info-panel">
+            <div class="metric">
+                <span class="metric-label">Filled</span>
+                <span class="metric-value" id="metric-filled">0/81</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Empty</span>
+                <span class="metric-value" id="metric-empty">81</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Progress</span>
+                <span class="metric-value" id="metric-progress">0%</span>
+            </div>
+        </div>
+    </div>
 
     <script>
         // Get board data from Python (injected via template replacement)
@@ -153,6 +202,7 @@
 
             // Validate all cells and mark invalid ones
             validateAllCells();
+            updateInfo();
 
             // Send updated board to Streamlit
             sendBoardToStreamlit();
@@ -172,6 +222,7 @@
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.target.value = '';
                 validateAllCells();
+                updateInfo();
                 sendBoardToStreamlit();
             }
         }
@@ -251,6 +302,20 @@
             });
         }
 
+        function updateInfo() {
+            const inputs = document.querySelectorAll('#sudoku-grid input');
+            let filled = 0;
+            inputs.forEach(inp => {
+                if (inp.value !== '') filled++;
+            });
+            const empty = 81 - filled;
+            const progress = Math.round((filled / 81) * 100);
+
+            document.getElementById('metric-filled').textContent = filled + '/81';
+            document.getElementById('metric-empty').textContent = empty;
+            document.getElementById('metric-progress').textContent = progress + '%';
+        }
+
         function sendBoardToStreamlit() {
             // Note: st.components.v1.html() doesn't support real-time bidirectional updates
             // The board state only updates when actions like Solve are clicked
@@ -259,6 +324,7 @@
         // Initialize grid on load
         buildGrid();
         validateAllCells();
+        updateInfo();
     </script>
 </body>
 </html>
