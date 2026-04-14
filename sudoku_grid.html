@@ -116,6 +116,57 @@
             font-weight: 700;
             color: rgb(49, 51, 63);
         }
+
+        /* Dark mode: subtle grey grid + light info text */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: transparent;
+            }
+
+            td {
+                background: #2a2a2a;
+                border-color: #555;
+            }
+
+            td:nth-child(3n+1) { border-left-color: #bbb; }
+            td:nth-child(9) { border-right-color: #bbb; }
+            tr:nth-child(3n+1) td { border-top-color: #bbb; }
+            tr:nth-child(9) td { border-bottom-color: #bbb; }
+
+            input {
+                color: #e0e0e0;
+            }
+
+            input.clue {
+                color: #ffffff;
+                background: #3a3a3a;
+            }
+
+            input.user-entry {
+                color: #64b5f6;
+            }
+
+            input.invalid {
+                color: #ff7070;
+                background: #4a2020;
+            }
+
+            input:focus {
+                background: #1e3a5f;
+            }
+
+            input:disabled {
+                background: #252525;
+            }
+
+            .metric-label {
+                color: rgba(230, 230, 230, 0.75);
+            }
+
+            .metric-value {
+                color: #ffffff;
+            }
+        }
     </style>
 </head>
 <body>
