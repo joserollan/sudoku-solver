@@ -2,10 +2,16 @@
 <html>
 <head>
     <style>
+        :root {
+            color-scheme: light;
+        }
+
         body {
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #ffffff;
+            color: #000000;
         }
 
         table {
@@ -21,6 +27,7 @@
             vertical-align: middle;
             border: 1px solid #999;
             padding: 0;
+            background: #ffffff;
         }
 
         /* 3x3 box borders - thick borders every 3 cells */
@@ -40,6 +47,7 @@
             padding: 0;
             margin: 0;
             background: transparent;
+            color: #1976d2;
             outline: none;
             box-sizing: border-box;
         }
@@ -108,13 +116,22 @@
         .metric-label {
             font-size: 14px;
             font-weight: 400;
-            color: rgba(49, 51, 63, 0.6);
+            color: rgba(49, 51, 63, 0.7);
         }
 
         .metric-value {
             font-size: 28px;
             font-weight: 700;
             color: rgb(49, 51, 63);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .metric-label {
+                color: rgba(230, 230, 230, 0.75);
+            }
+            .metric-value {
+                color: #ffffff;
+            }
         }
     </style>
 </head>
@@ -157,6 +174,9 @@
                     const input = document.createElement('input');
 
                     input.type = 'text';
+                    input.inputMode = 'numeric';
+                    input.setAttribute('pattern', '[1-9]*');
+                    input.autocomplete = 'off';
                     input.maxLength = 1;
                     input.value = initialBoard[i][j] === 0 ? '' : initialBoard[i][j];
                     input.dataset.row = i;
