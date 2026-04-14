@@ -208,6 +208,9 @@
                     const input = document.createElement('input');
 
                     input.type = 'text';
+                    input.inputMode = 'numeric';
+                    input.setAttribute('pattern', '[1-9]*');
+                    input.autocomplete = 'off';
                     input.maxLength = 1;
                     input.value = initialBoard[i][j] === 0 ? '' : initialBoard[i][j];
                     input.dataset.row = i;
