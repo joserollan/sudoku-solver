@@ -257,9 +257,6 @@
             // Validate all cells and mark invalid ones
             validateAllCells();
             updateInfo();
-
-            // Send updated board to Streamlit
-            sendBoardToStreamlit();
         }
 
         function handleKeyDown(e) {
@@ -277,7 +274,6 @@
                 e.target.value = '';
                 validateAllCells();
                 updateInfo();
-                sendBoardToStreamlit();
             }
         }
 
@@ -368,11 +364,6 @@
             document.getElementById('metric-filled').textContent = filled + '/81';
             document.getElementById('metric-empty').textContent = empty;
             document.getElementById('metric-progress').textContent = progress + '%';
-        }
-
-        function sendBoardToStreamlit() {
-            // Note: st.components.v1.html() doesn't support real-time bidirectional updates
-            // The board state only updates when actions like Solve are clicked
         }
 
         // Initialize grid on load
