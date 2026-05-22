@@ -280,6 +280,10 @@ st.markdown("""
         .block-container {
             padding-top: 2rem;
         }
+        /* Hide the "Press Ctrl+Enter to apply" hint (no keyboard on mobile) */
+        [data-testid="InputInstructions"] {
+            display: none;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -306,17 +310,15 @@ top_left, spacer, top_right = st.columns([1, 0.1, 1])
 with top_left:
     st.markdown("### 📋 Import Puzzle")
 
-    with st.form("import_form"):
-        pasted = st.text_area(
-            "Paste your Sudoku grid (9x9, with 0s or blanks for empty cells):",
-            value=st.session_state.pasted,
-            height=125,
-            placeholder="Paste grid here..."
-        )
-        imported = st.form_submit_button("Import puzzle", use_container_width=True)
+    pasted = st.text_area(
+        "Paste your Sudoku grid (9x9, with 0s or blanks for empty cells):",
+        value=st.session_state.pasted,
+        height=125,
+        placeholder="Paste grid here..."
+    )
+    st.session_state.pasted = pasted
 
-    if imported:
-        st.session_state.pasted = pasted
+    if st.button("Import", use_container_width=True):
         parsed_board = parse_sudoku_text(pasted)
         if parsed_board is not None:
             st.session_state.board = parsed_board
