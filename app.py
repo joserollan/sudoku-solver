@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import random
+import re
 
 
 # ============================================================================
@@ -154,46 +155,59 @@ def parse_sudoku_text(pasted_text):
     if not pasted_text:
         return None
 
-    lines = pasted_text.splitlines()
-    grid = []
+    try:
+        lines = pasted_text.splitlines()
+        grid = []
 
-    for r in lines:
-        if not r.strip():
-            continue
+        for r in lines:
+            if not r.strip():
+                continue
 
-        r = r.rstrip("\r\n")
+            r = r.rstrip("\r\n")
 
-        # Compact 9-digit row (0 = empty)
-        if re.fullmatch(r"[0-9]{9}", r.strip()):
-            row = [int(c) for c in r.strip()]
-        else:
-            # Split by tabs first
-            parts = r.split("\t")
-            row = []
-            for part in parts:
-                subparts = re.split(r" ", part)
-                for sp in subparts:
-                    sp = sp.strip()
-                    if sp == "":
-                        row.append(0)
-                    else:
-                        try:
-                            row.append(int(re.search(r"\d+", sp).group()))
-                        except:
+            # Compact 9-digit row (0 = empty)
+            if re.fullmatch(r"[0-9]{9}", r.strip()):
+                row = [int(c) for c in r.strip()]
+            else:
+                # Split by tabs first
+                parts = r.split("\t")
+                row = []
+                for part in parts:
+                    subparts = re.split(r" ", part)
+                    for sp in subparts:
+                        sp = sp.strip()
+                        if sp == "":
                             row.append(0)
-            # Pad to 9 columns
-            if len(row) < 9:
-                row += [0] * (9 - len(row))
-            row = row[:9]
+                        else:
+                            try:
+                                row.append(int(re.search(r"\d+", sp).group()))
+                            except:
+                                row.append(0)
+                # Pad to 9 columns
+                if len(row) < 9:
+                    row += [0] * (9 - len(row))
+                row = row[:9]
 
-        grid.append(row)
+            grid.append(row)
 
-    # Pad to 9 rows
-    while len(grid) < 9:
-        grid.append([0]*9)
-    grid = grid[:9]
+        # Pad to 9 rows
+        while len(grid) < 9:
+            grid.append([0]*9)
+        grid = grid[:9]
 
-    return np.array(grid, dtype=int)
+        board = np.array(grid, dtype=int)
+    except Exception:
+        return None
+
+    # Reject values outside the valid Sudoku range (e.g. a stray "12")
+    if not ((board >= 0) & (board <= 9)).all():
+        return None
+
+    # Non-empty input that yielded no clues at all is unparseable garbage
+    if not board.any():
+        return None
+
+    return board
 
 
 # ============================================================================
@@ -281,14 +295,6 @@ if "board_parsed" not in st.session_state:
 if "initial_clues" not in st.session_state:
     st.session_state.initial_clues = np.zeros((9, 9), dtype=bool)
 
-# Load pasted board
-if st.session_state.pasted.strip() != "" and not st.session_state.board_parsed:
-    parsed_board = parse_sudoku_text(st.session_state.pasted)
-    if parsed_board is not None:
-        st.session_state.board = parsed_board
-        st.session_state.initial_clues = (parsed_board != 0)
-        st.session_state.board_parsed = True
-
 board = st.session_state.board
 
 # ============================================================================
@@ -300,13 +306,28 @@ top_left, spacer, top_right = st.columns([1, 0.1, 1])
 with top_left:
     st.markdown("### 📋 Import Puzzle")
 
-    pasted = st.text_area(
-        "Paste your Sudoku grid (9x9, with 0s or blanks for empty cells):",
-        value=st.session_state.pasted,
-        height=125,
-        placeholder="Paste grid here..."
-    )
-    st.session_state.pasted = pasted
+    with st.form("import_form"):
+        pasted = st.text_area(
+            "Paste your Sudoku grid (9x9, with 0s or blanks for empty cells):",
+            value=st.session_state.pasted,
+            height=125,
+            placeholder="Paste grid here..."
+        )
+        imported = st.form_submit_button("Import puzzle", use_container_width=True)
+
+    if imported:
+        st.session_state.pasted = pasted
+        parsed_board = parse_sudoku_text(pasted)
+        if parsed_board is not None:
+            st.session_state.board = parsed_board
+            st.session_state.initial_clues = (parsed_board != 0)
+            st.session_state.board_parsed = True
+            st.rerun()
+        else:
+            st.error(
+                "Couldn't read that as a Sudoku grid. Paste 9 rows of digits "
+                "(0 or blank for empty cells)."
+            )
 
 with spacer:
     st.markdown("<div style='text-align: center; padding-top: 80px; font-size: 18px; font-weight: bold;'>OR</div>", unsafe_allow_html=True)
