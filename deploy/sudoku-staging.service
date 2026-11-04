@@ -1,0 +1,16 @@
+# Staging copy of the app. Listens on localhost only; it is reached from your
+# devices through `tailscale serve`, never from the public internet.
+# Install: sudo cp deploy/sudoku-staging.service /etc/systemd/system/
+[Unit]
+Description=Sudoku Solver (staging)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/sudoku-staging
+ExecStart=/home/ubuntu/sudoku-staging/venv/bin/streamlit run app.py --server.address 127.0.0.1 --server.port 8502 --server.headless true
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
