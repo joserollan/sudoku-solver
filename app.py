@@ -284,6 +284,29 @@ st.markdown("""
         [data-testid="InputInstructions"] {
             display: none;
         }
+        /* Make the image uploader look like a plain full-width button
+           (only while empty; once a file is picked, Streamlit's file chip
+           with its remove "x" is shown as-is) */
+        .st-key-image_upload [data-testid="stFileUploaderDropzone"]:not(:has([data-testid="stFileChips"])) {
+            padding: 0;
+            border: none;
+            min-height: 0;
+            height: auto;
+            background: transparent;
+        }
+        .st-key-image_upload [data-testid="stFileUploaderDropzoneInstructions"] {
+            display: none;
+        }
+        .st-key-image_upload [data-testid="stFileUploaderDropzone"] > span,
+        .st-key-image_upload [data-testid="stBaseButton-secondary"] {
+            width: 100%;
+        }
+        .st-key-image_upload [data-testid="stBaseButton-secondary"] > div {
+            display: none;
+        }
+        .st-key-image_upload [data-testid="stBaseButton-secondary"]::after {
+            content: "📷 Imagen";
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -330,6 +353,19 @@ with top_left:
                 "Couldn't read that as a Sudoku grid. Paste 9 rows of digits "
                 "(0 or blank for empty cells)."
             )
+
+    # Image import: a file input opens the device's native picker
+    # (gallery / camera / files on mobile, file dialog on desktop).
+    # Styled via CSS (see .st-key-image_upload above) to look like a button.
+    uploaded_image = st.file_uploader(
+        "Imagen",
+        type=["png", "jpg", "jpeg", "webp"],
+        key="image_upload",
+        label_visibility="collapsed",
+    )
+    if uploaded_image is not None:
+        # Recognition comes in a later step; for now just confirm receipt.
+        st.image(uploaded_image, caption=uploaded_image.name, width=200)
 
 with spacer:
     st.markdown("<div style='text-align: center; padding-top: 80px; font-size: 18px; font-weight: bold;'>OR</div>", unsafe_allow_html=True)
