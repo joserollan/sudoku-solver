@@ -284,7 +284,8 @@ st.markdown("""
         [data-testid="InputInstructions"] {
             display: none;
         }
-        /* Make the image uploader look like a plain full-width button
+        /* Make the image uploader look like a plain full-width button,
+           visually identical to the Import button above it
            (only while empty; once a file is picked, Streamlit's file chip
            with its remove "x" is shown as-is) */
         .st-key-image_upload [data-testid="stFileUploaderDropzone"]:not(:has([data-testid="stFileChips"])) {
@@ -305,7 +306,10 @@ st.markdown("""
             display: none;
         }
         .st-key-image_upload [data-testid="stBaseButton-secondary"]::after {
-            content: "📷 Imagen";
+            content: "Imagen";
+            /* match st.button labels, which render in a 14px <p> */
+            font-size: 0.875rem;
+            line-height: 1.6;
         }
     </style>
 """, unsafe_allow_html=True)
