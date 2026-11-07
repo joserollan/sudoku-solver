@@ -287,7 +287,7 @@ st.markdown("""
             display: none;
         }
         /* Image input: a box the same height as the paste text area, with
-           a centered "Imagen" button that opens the native picker. Once a
+           a centered "Picture" button that opens the native picker. Once a
            picture is loaded the uploader is hidden and a preview takes its
            place (see the Import section below). */
         [class*="st-key-image_upload"] [data-testid="stFileUploaderDropzone"] {
@@ -303,7 +303,7 @@ st.markdown("""
             display: none;
         }
         [class*="st-key-image_upload"] [data-testid="stBaseButton-secondary"]::after {
-            content: "Imagen";
+            content: "Picture";
             /* match st.button labels, which render in a 14px <p> */
             font-size: 0.875rem;
             line-height: 1.6;
