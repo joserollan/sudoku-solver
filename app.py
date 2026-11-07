@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 import random
 import re
+import base64
+import html
 
 
 # ============================================================================
@@ -284,32 +286,47 @@ st.markdown("""
         [data-testid="InputInstructions"] {
             display: none;
         }
-        /* Make the image uploader look like a plain full-width button,
-           visually identical to the Import button above it
-           (only while empty; once a file is picked, Streamlit's file chip
-           with its remove "x" is shown as-is) */
-        .st-key-image_upload [data-testid="stFileUploaderDropzone"]:not(:has([data-testid="stFileChips"])) {
+        /* Image input: a box the same height as the paste text area, with
+           a centered "Imagen" button that opens the native picker. Once a
+           picture is loaded the uploader is hidden and a preview takes its
+           place (see the Import section below). */
+        [class*="st-key-image_upload"] [data-testid="stFileUploaderDropzone"] {
+            height: 125px;
             padding: 0;
-            border: none;
-            min-height: 0;
-            height: auto;
-            background: transparent;
+            justify-content: center;
+            align-items: center;
         }
-        .st-key-image_upload [data-testid="stFileUploaderDropzoneInstructions"] {
+        [class*="st-key-image_upload"] [data-testid="stFileUploaderDropzoneInstructions"] {
             display: none;
         }
-        .st-key-image_upload [data-testid="stFileUploaderDropzone"] > span,
-        .st-key-image_upload [data-testid="stBaseButton-secondary"] {
-            width: 100%;
-        }
-        .st-key-image_upload [data-testid="stBaseButton-secondary"] > div {
+        [class*="st-key-image_upload"] [data-testid="stBaseButton-secondary"] > div {
             display: none;
         }
-        .st-key-image_upload [data-testid="stBaseButton-secondary"]::after {
+        [class*="st-key-image_upload"] [data-testid="stBaseButton-secondary"]::after {
             content: "Imagen";
             /* match st.button labels, which render in a 14px <p> */
             font-size: 0.875rem;
             line-height: 1.6;
+        }
+        [class*="st-key-image_upload"]:has([data-testid="stFileChips"]) {
+            display: none;
+        }
+        .image-preview {
+            height: 125px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            /* same box as the paste text area and the empty dropzone */
+            border-radius: 8px;
+            border: 1px solid rgb(220, 216, 212);
+            background: rgb(248, 248, 247);
+            overflow: hidden;
+        }
+        .image-preview img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -325,6 +342,9 @@ if "board_parsed" not in st.session_state:
     st.session_state.board_parsed = False
 if "initial_clues" not in st.session_state:
     st.session_state.initial_clues = np.zeros((9, 9), dtype=bool)
+if "image_upload_nonce" not in st.session_state:
+    # Bumped to reset the picture uploader (Remove / Generate / Clear)
+    st.session_state.image_upload_nonce = 0
 
 board = st.session_state.board
 
@@ -337,39 +357,60 @@ top_left, spacer, top_right = st.columns([1, 0.1, 1])
 with top_left:
     st.markdown("### 📋 Import Puzzle")
 
-    pasted = st.text_area(
-        "Paste your Sudoku grid (9x9, with 0s or blanks for empty cells):",
-        value=st.session_state.pasted,
-        height=125,
-        placeholder="Paste grid here..."
+    st.markdown(
+        "Paste a 9x9 grid (0s or blanks for empty cells) or add a picture of it:"
     )
-    st.session_state.pasted = pasted
+    text_col, image_col = st.columns(2)
+
+    with text_col:
+        pasted = st.text_area(
+            "Pasted grid",
+            value=st.session_state.pasted,
+            height=125,
+            placeholder="Paste grid here...",
+            label_visibility="collapsed",
+        )
+        st.session_state.pasted = pasted
+
+    with image_col:
+        # A file input opens the device's native picker (camera / photo
+        # library / files on mobile, file dialog on desktop). Its key carries
+        # a nonce so "Remove" can reset it to empty.
+        uploaded_image = st.file_uploader(
+            "Picture",
+            type=["png", "jpg", "jpeg", "webp"],
+            key=f"image_upload_{st.session_state.image_upload_nonce}",
+            label_visibility="collapsed",
+        )
+        if uploaded_image is not None:
+            mime = uploaded_image.type or "image/png"
+            data = base64.b64encode(uploaded_image.getvalue()).decode()
+            st.markdown(
+                f'<div class="image-preview"><img src="data:{mime};base64,{data}" '
+                f'alt="{html.escape(uploaded_image.name)}"></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("✕ Remove picture", type="tertiary"):
+                st.session_state.image_upload_nonce += 1
+                st.rerun()
 
     if st.button("Import", use_container_width=True):
-        parsed_board = parse_sudoku_text(pasted)
-        if parsed_board is not None:
-            st.session_state.board = parsed_board
-            st.session_state.initial_clues = (parsed_board != 0)
-            st.session_state.board_parsed = True
-            st.rerun()
+        if uploaded_image is not None:
+            # A loaded picture takes precedence over pasted text.
+            # OCR is the next step; for now just acknowledge the picture.
+            st.info("Reading numbers from pictures is coming next.")
         else:
-            st.error(
-                "Couldn't read that as a Sudoku grid. Paste 9 rows of digits "
-                "(0 or blank for empty cells)."
-            )
-
-    # Image import: a file input opens the device's native picker
-    # (gallery / camera / files on mobile, file dialog on desktop).
-    # Styled via CSS (see .st-key-image_upload above) to look like a button.
-    uploaded_image = st.file_uploader(
-        "Imagen",
-        type=["png", "jpg", "jpeg", "webp"],
-        key="image_upload",
-        label_visibility="collapsed",
-    )
-    if uploaded_image is not None:
-        # Recognition comes in a later step; for now just confirm receipt.
-        st.image(uploaded_image, caption=uploaded_image.name, width=200)
+            parsed_board = parse_sudoku_text(pasted)
+            if parsed_board is not None:
+                st.session_state.board = parsed_board
+                st.session_state.initial_clues = (parsed_board != 0)
+                st.session_state.board_parsed = True
+                st.rerun()
+            else:
+                st.error(
+                    "Couldn't read that as a Sudoku grid. Paste 9 rows of digits "
+                    "(0 or blank for empty cells), or add a picture."
+                )
 
 with spacer:
     st.markdown("<div style='text-align: center; padding-top: 80px; font-size: 18px; font-weight: bold;'>OR</div>", unsafe_allow_html=True)
@@ -391,6 +432,7 @@ with top_right:
             st.session_state.board = new_puzzle
             st.session_state.initial_clues = (new_puzzle != 0)
             st.session_state.pasted = ""
+            st.session_state.image_upload_nonce += 1
             st.session_state.board_parsed = False
             st.rerun()
 
@@ -422,6 +464,7 @@ with left_col:
         st.session_state.board = np.zeros((9, 9), dtype=int)
         st.session_state.initial_clues = np.zeros((9, 9), dtype=bool)
         st.session_state.pasted = ""
+        st.session_state.image_upload_nonce += 1
         st.session_state.board_parsed = False
         st.rerun()
 
