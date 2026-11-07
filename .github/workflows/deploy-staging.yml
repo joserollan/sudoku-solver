@@ -1,6 +1,10 @@
 name: Deploy to Staging
 
 on:
+  # Pushing any commit to the `staging` branch deploys it, e.g.
+  #   git push -f origin my-feature-branch:staging
+  push:
+    branches: [ staging ]
   workflow_dispatch:
     inputs:
       branch:
