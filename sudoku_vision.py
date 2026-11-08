@@ -1,10 +1,13 @@
-"""Find a Sudoku grid in a photo and straighten it.
+"""Read a Sudoku from a photo.
 
-Pipeline (step 2 of the picture import; digit reading comes next):
+Pipeline (read_sudoku does all of it):
   1. decode the upload, honouring the phone's EXIF rotation
   2. find the grid's outer border: the largest 4-cornered outline in a
      thresholded copy of the picture
   3. perspective-warp that quadrilateral into a flat square
+  4. turn it upright if the photo was sideways / upside down
+  5. split into 81 cells, cut out the digit in each non-empty one, and
+     read the digits with Tesseract (3 readings per digit, majority vote)
 """
 
 import io
@@ -91,3 +94,185 @@ def warp_grid(img: np.ndarray, corners: np.ndarray, size: int = 450) -> np.ndarr
     dst = np.array([[0, 0], [size - 1, 0], [size - 1, size - 1], [0, size - 1]], dtype=np.float32)
     matrix = cv2.getPerspectiveTransform(np.asarray(corners, dtype=np.float32), dst)
     return cv2.warpPerspective(img, matrix, (size, size))
+
+
+# ---------------------------------------------------------------------------
+# Reading the digits
+# ---------------------------------------------------------------------------
+
+_CELL = 50  # px per cell in the straightened grid (warp size 450 / 9)
+
+
+def _configure_tesseract():
+    """Point pytesseract at the Windows install when it isn't on PATH."""
+    import os
+    import shutil
+
+    import pytesseract
+
+    default = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    if shutil.which("tesseract") is None and os.path.exists(default):
+        pytesseract.pytesseract.tesseract_cmd = default
+    return pytesseract
+
+
+def _binarize_grid(grid: np.ndarray) -> np.ndarray:
+    """Ink -> white, paper -> black. Window 35px / offset 7 keeps faint,
+    blurry digits while ignoring paper texture (tuned on the dataset)."""
+    gray = cv2.cvtColor(grid, cv2.COLOR_BGR2GRAY)
+    return cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 35, 7
+    )
+
+
+def extract_digits(grid: np.ndarray):
+    """Split a straightened 450x450 grid into 81 cells and cut out each digit.
+
+    Returns (cells, binary, gray): the (row, col) of every non-empty cell
+    and, for each, the digit cut from the black/white image and from the
+    contrast-stretched grey image (ink bright on dark in both). The grey cut
+    keeps the shape of blurry digits that thresholding turns into blobs (an
+    8's holes close up); reading both and voting beats either alone.
+    """
+    binary = _binarize_grid(grid)
+    ink = 255 - cv2.cvtColor(grid, cv2.COLOR_BGR2GRAY)
+    cells, bin_cuts, gray_cuts = [], [], []
+    for r in range(9):
+        for c in range(9):
+            ys, xs = slice(r * _CELL, (r + 1) * _CELL), slice(c * _CELL, (c + 1) * _CELL)
+            box = _digit_box(binary[ys, xs])
+            if box is None:
+                continue
+            x, y, w, h = box
+            crop = ink[ys, xs][y:y + h, x:x + w].astype(np.float32)
+            lo, hi = np.percentile(crop, 5), crop.max()
+            cells.append((r, c))
+            bin_cuts.append(binary[ys, xs][y:y + h, x:x + w])
+            gray_cuts.append(np.clip((crop - lo) * 255 / max(hi - lo, 1), 0, 255).astype(np.uint8))
+    return cells, bin_cuts, gray_cuts
+
+
+def _digit_box(cell: np.ndarray):
+    """Return the digit's bounding box (x, y, w, h) in a binary cell, or None
+    if the cell is empty.
+
+    Grid lines touch the cell's edges, digits sit near its centre: keep the
+    largest blob whose centre is in the middle of the cell and whose height
+    is digit-like.
+    """
+    n, labels, stats, centroids = cv2.connectedComponentsWithStats(cell, connectivity=8)
+    size = cell.shape[0]
+    best, best_area = None, 0
+    for i in range(1, n):
+        x, y, w, h, area = stats[i]
+        cx, cy = centroids[i]
+        if not (0.25 * size < cx < 0.75 * size and 0.25 * size < cy < 0.75 * size):
+            continue
+        if not (0.3 * size <= h <= 0.9 * size) or w > 0.8 * size:
+            continue
+        if area > best_area:
+            best, best_area = i, area
+    if best is None:
+        return None
+    x, y, w, h, _ = stats[best]
+    return int(x), int(y), int(w), int(h)
+
+
+_DIGIT_H = 40  # digit height fed to Tesseract
+_WHITELIST = "tessedit_char_whitelist=123456789"
+
+# Each digit is read 3 ways and the majority wins (ties go to the first).
+# (cut, Tesseract page-segmentation mode); 10 = single character,
+# 13 = raw line. Chosen on the 200-photo dataset: this trio got the most
+# puzzles fully right of all combinations of {binary, grey} x {8, 10, 13}.
+_VOTERS = (("binary", 10), ("gray", 10), ("gray", 13))
+
+
+def _digit_page(cut: np.ndarray) -> Image.Image:
+    """Black digit on white, _DIGIT_H tall, with a margin: what Tesseract likes."""
+    h, w = cut.shape
+    # Width capped at 50px: a cut that is wider than a digit (a smudge or a
+    # bit of grid line attached) gets squeezed rather than dominating.
+    new_w = min(50, max(1, round(w * _DIGIT_H / h)))
+    digit = cv2.resize(cut, (new_w, _DIGIT_H), interpolation=cv2.INTER_CUBIC)
+    canvas = np.zeros((_DIGIT_H + 40, 110), np.uint8)
+    x0 = (canvas.shape[1] - digit.shape[1]) // 2
+    canvas[20:20 + _DIGIT_H, x0:x0 + digit.shape[1]] = digit
+    return Image.fromarray(255 - canvas)
+
+
+def _read_pages(cuts, psm: int) -> list:
+    """Read many digit cuts in ONE Tesseract run; 0 where nothing was read.
+
+    Starting Tesseract costs ~0.1-0.3 s, so one run per cell would take
+    several seconds per puzzle. Instead every digit becomes a page of a
+    multi-page TIFF: Tesseract still reads each page on its own (as
+    accurate as one run per cell) and separates the pages' text with a
+    form feed, which maps the answers back to their cells.
+    """
+    if not cuts:
+        return []
+    import os
+    import subprocess
+    import tempfile
+
+    exe = _configure_tesseract().pytesseract.tesseract_cmd
+    pages = [_digit_page(cut) for cut in cuts]
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "digits.tif")
+        pages[0].save(path, save_all=True, append_images=pages[1:])
+        out = subprocess.run(
+            [exe, path, "stdout", "--psm", str(psm), "-c", _WHITELIST],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    texts = out.split("")
+    digits = []
+    for i in range(len(cuts)):
+        found = [ch for ch in (texts[i] if i < len(texts) else "") if ch in "123456789"]
+        digits.append(int(found[0]) if found else 0)
+    return digits
+
+
+def orient_grid(grid: np.ndarray, sample: int = 15) -> np.ndarray:
+    """Rotate a straightened grid so its digits are upright.
+
+    Photos without an EXIF rotation flag (screenshots, forwarded images,
+    shots taken looking straight down) can arrive sideways or upside down.
+    Tesseract recognises far fewer digits when they're rotated, so read a
+    sample of digits in each of the 4 rotations and keep the best one.
+    """
+    best_grid, best_score = grid, -1.0
+    for k in range(4):
+        candidate = np.ascontiguousarray(np.rot90(grid, k))
+        _, bin_cuts, _ = extract_digits(candidate)
+        bin_cuts = bin_cuts[:sample]
+        if not bin_cuts:
+            continue
+        score = sum(d != 0 for d in _read_pages(bin_cuts, 10)) / len(bin_cuts)
+        if score > best_score:
+            best_grid, best_score = candidate, score
+        if k == 0 and score >= 0.8:
+            break  # clearly upright: the usual case, skip the other rotations
+    return best_grid
+
+
+def read_board(grid: np.ndarray) -> np.ndarray:
+    """Read all 81 cells of an upright, straightened grid (0 = empty)."""
+    cells, bin_cuts, gray_cuts = extract_digits(grid)
+    cuts = {"binary": bin_cuts, "gray": gray_cuts}
+    readings = [_read_pages(cuts[kind], psm) for kind, psm in _VOTERS]
+    board = np.zeros((9, 9), dtype=int)
+    for i, (r, c) in enumerate(cells):
+        votes = [reading[i] for reading in readings if reading[i]]
+        if votes:
+            board[r, c] = max(votes, key=votes.count)  # ties: first voter wins
+    return board
+
+
+def read_sudoku(data: bytes):
+    """Picture bytes -> 9x9 board (0 = empty), or None if no grid was found."""
+    photo = load_image(data)
+    corners = find_grid_corners(photo)
+    if corners is None:
+        return None
+    return read_board(orient_grid(warp_grid(photo, corners)))

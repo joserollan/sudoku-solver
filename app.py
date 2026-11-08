@@ -218,6 +218,22 @@ def parse_sudoku_text(pasted_text):
 # STREAMLIT UI
 # ============================================================================
 
+def count_conflicts(board):
+    """Number of filled cells whose value repeats in their row, column or box."""
+    clashing = set()
+    for i in range(9):
+        for j in range(9):
+            v = board[i, j]
+            if v == 0:
+                continue
+            br, bc = 3 * (i // 3), 3 * (j // 3)
+            peers = [(i, k) for k in range(9)] + [(k, j) for k in range(9)] + [
+                (br + a, bc + b) for a in range(3) for b in range(3)]
+            if any(board[p] == v for p in peers if p != (i, j)):
+                clashing.add((i, j))
+    return len(clashing)
+
+
 def is_board_solved(board):
     """Check if the board is completely filled and valid"""
     # Check if board is full
@@ -344,6 +360,9 @@ if "board_parsed" not in st.session_state:
     st.session_state.board_parsed = False
 if "initial_clues" not in st.session_state:
     st.session_state.initial_clues = np.zeros((9, 9), dtype=bool)
+if "import_notice" not in st.session_state:
+    # (kind, message) shown under Import after a picture was read
+    st.session_state.import_notice = None
 if "image_upload_nonce" not in st.session_state:
     # Bumped to reset the picture uploader (Remove / Generate / Clear)
     st.session_state.image_upload_nonce = 0
@@ -397,24 +416,37 @@ with top_left:
                 st.rerun()
 
     if st.button("Import", use_container_width=True):
+        st.session_state.import_notice = None
         if uploaded_image is not None:
             # A loaded picture takes precedence over pasted text.
-            # Digit reading (OCR) is the next step; for now show the grid
-            # that was found, straightened, so detection can be checked.
-            photo = sudoku_vision.load_image(uploaded_image.getvalue())
-            corners = sudoku_vision.find_grid_corners(photo)
-            if corners is None:
+            with st.spinner("Reading the numbers from the picture..."):
+                read_board = sudoku_vision.read_sudoku(uploaded_image.getvalue())
+            if read_board is None:
                 st.error(
                     "Couldn't find a Sudoku grid in that picture. Try a closer, "
                     "straighter photo with the whole grid visible."
                 )
-            else:
-                grid = sudoku_vision.warp_grid(photo, corners)
-                st.image(
-                    grid[:, :, ::-1],  # BGR -> RGB
-                    caption="Grid found. Reading the numbers is coming next.",
-                    width=250,
+            elif not read_board.any():
+                st.error(
+                    "Found a grid but couldn't read any numbers in it. Try a "
+                    "sharper, better-lit photo."
                 )
+            else:
+                st.session_state.board = read_board
+                st.session_state.initial_clues = (read_board != 0)
+                st.session_state.board_parsed = True
+                clashes = count_conflicts(read_board)
+                st.session_state.import_notice = (
+                    ("warning",
+                     f"Read {np.count_nonzero(read_board)} numbers, but {clashes} "
+                     "cells clash (the same number twice in a row, column or "
+                     "box), so some were misread. Compare with the picture.")
+                    if clashes else
+                    ("success",
+                     f"Read {np.count_nonzero(read_board)} numbers from the "
+                     "picture. Check them against it before solving.")
+                )
+                st.rerun()
         else:
             parsed_board = parse_sudoku_text(pasted)
             if parsed_board is not None:
@@ -427,6 +459,10 @@ with top_left:
                     "Couldn't read that as a Sudoku grid. Paste 9 rows of digits "
                     "(0 or blank for empty cells), or add a picture."
                 )
+
+    notice = st.session_state.import_notice
+    if notice:
+        getattr(st, notice[0])(notice[1])
 
 with spacer:
     st.markdown("<div style='text-align: center; padding-top: 80px; font-size: 18px; font-weight: bold;'>OR</div>", unsafe_allow_html=True)
@@ -449,6 +485,7 @@ with top_right:
             st.session_state.initial_clues = (new_puzzle != 0)
             st.session_state.pasted = ""
             st.session_state.image_upload_nonce += 1
+            st.session_state.import_notice = None
             st.session_state.board_parsed = False
             st.rerun()
 
@@ -481,6 +518,7 @@ with left_col:
         st.session_state.initial_clues = np.zeros((9, 9), dtype=bool)
         st.session_state.pasted = ""
         st.session_state.image_upload_nonce += 1
+        st.session_state.import_notice = None
         st.session_state.board_parsed = False
         st.rerun()
 
