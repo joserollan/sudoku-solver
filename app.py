@@ -343,10 +343,13 @@ st.markdown("""
             align-items: center;
             justify-content: center;
             box-sizing: border-box;
-            /* same box as the paste text area and the empty dropzone */
+            /* same box as the paste text area and the empty dropzone.
+               light-dark() follows the color-scheme Streamlit sets for the
+               active theme, so this switches with it (Streamlit 1.67's
+               default light / dark theme colours) */
             border-radius: 8px;
-            border: 1px solid rgb(220, 216, 212);
-            background: rgb(248, 248, 247);
+            border: 1px solid light-dark(rgb(220, 216, 212), rgb(74, 71, 66));
+            background: light-dark(rgb(248, 248, 247), rgb(45, 43, 39));
             overflow: hidden;
         }
         .image-preview img {
@@ -377,7 +380,8 @@ st.markdown("""
         }
         .picture-name {
             font-size: 0.875rem;
-            color: rgba(49, 51, 63, 0.6);
+            color: inherit;  /* the theme's text colour, faded */
+            opacity: 0.6;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -391,9 +395,9 @@ st.markdown("""
             font-size: 0.875rem;
             line-height: 1.4;
         }
-        .import-notice.success { color: #2e7d32; }
-        .import-notice.warning { color: #a15c00; }
-        .import-notice.error { color: #c62828; }
+        .import-notice.success { color: light-dark(#2e7d32, #7dd38b); }
+        .import-notice.warning { color: light-dark(#a15c00, #f0b45a); }
+        .import-notice.error { color: light-dark(#c62828, #ff8a80); }
     </style>
 """, unsafe_allow_html=True)
 
