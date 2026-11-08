@@ -5,6 +5,8 @@ import re
 import base64
 import html
 
+import sudoku_vision
+
 
 # ============================================================================
 # CORE SUDOKU FUNCTIONS
@@ -397,8 +399,22 @@ with top_left:
     if st.button("Import", use_container_width=True):
         if uploaded_image is not None:
             # A loaded picture takes precedence over pasted text.
-            # OCR is the next step; for now just acknowledge the picture.
-            st.info("Reading numbers from pictures is coming next.")
+            # Digit reading (OCR) is the next step; for now show the grid
+            # that was found, straightened, so detection can be checked.
+            photo = sudoku_vision.load_image(uploaded_image.getvalue())
+            corners = sudoku_vision.find_grid_corners(photo)
+            if corners is None:
+                st.error(
+                    "Couldn't find a Sudoku grid in that picture. Try a closer, "
+                    "straighter photo with the whole grid visible."
+                )
+            else:
+                grid = sudoku_vision.warp_grid(photo, corners)
+                st.image(
+                    grid[:, :, ::-1],  # BGR -> RGB
+                    caption="Grid found. Reading the numbers is coming next.",
+                    width=250,
+                )
         else:
             parsed_board = parse_sudoku_text(pasted)
             if parsed_board is not None:
