@@ -15,6 +15,10 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -euo pipefail
+            # System programs the app needs (shared by prod and staging)
+            command -v tesseract >/dev/null || (sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr)
             cd ~/sudoku-solver
             git pull origin main
+            venv/bin/pip install -q -r requirements.txt
             sudo systemctl restart sudoku

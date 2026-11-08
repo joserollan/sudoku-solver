@@ -32,6 +32,8 @@ jobs:
           script: |
             set -euo pipefail
             git check-ref-format --branch "$BRANCH" >/dev/null
+            # System programs the app needs (shared by prod and staging)
+            command -v tesseract >/dev/null || (sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr)
             cd ~/sudoku-staging
             git fetch --prune origin
             git checkout -f -B staging "origin/$BRANCH"
