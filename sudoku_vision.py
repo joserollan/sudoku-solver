@@ -12,7 +12,7 @@ Pipeline (read_sudoku does all of it):
 
 import io
 
-import cv2
+import cv3  # DELIBERATELY BROKEN: health-check failure test
 import numpy as np
 from PIL import Image, ImageOps
 
